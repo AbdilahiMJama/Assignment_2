@@ -19,14 +19,21 @@ import "dotenv/config";
 import readline from "readline-sync";
 import fs from "fs/promises";
 
-// Initialize S3 client
 // Set the endpoints in the MINIO constructor and hide the access keys.
 const s3Client = new Minio.Client({
   endPoint: "s3.amazonaws.com",
   accessKey: process.env.AWS_ACCESS_KEY,
   secretKey: process.env.AWS_SECRET_KEY,
+  region: process.env.AWS_REGION,
 });
-
+async function createBucket(bucketName) {
+  try {
+    await s3Client.makeBucket(bucketName, process.env.AWS_REGION);
+    console.log(`Bucket "${bucketName}" created.`);
+  } catch (err) {
+    console.error("Error creating bucket:", err.message);
+  }
+}
 // List all buckets
 async function listBuckets() {
   try {
@@ -37,7 +44,14 @@ async function listBuckets() {
     console.error("Error listing buckets:", err.message);
   }
 }
-
+async function deleteBucket(bucketName) {
+  try {
+    await s3Client.removeBucket(bucketName);
+    console.log(`Bucket "${bucketName}" removed.`);
+  } catch (err) {
+    console.error("Error removing bucket:", err.message);
+  }
+}
 // List objects in a specific bucket
 async function listObjects(bucketName) {
   try {
@@ -52,7 +66,7 @@ async function listObjects(bucketName) {
     console.error("Error:", err.message);
   }
 }
-
+/*
 // Upload a file to a bucket
 async function uploadObject(bucketName, filePath, objectName) {
   try {
@@ -67,6 +81,29 @@ async function uploadObject(bucketName, filePath, objectName) {
   } catch (err) {
     console.error("Error uploading file:", err.message);
   }
+}*/
+
+async function uploadObject(bucketName, filePath, objectName) {
+  try {
+    const fileData = await new Promise((resolve, reject) => {
+      fs.readFile(filePath, (err, data) => {
+        if (err) {
+          reject(err);
+        } else {
+          resolve(data);
+        }
+      });
+    });
+
+    const metaData = {
+      "Content-Type": "text/plain",
+    };
+
+    await minioClient.putObject(bucketName, objectName, fileData, metaData);
+    console.log("File uploaded successfully.");
+  } catch (err) {
+    console.error("Error uploading file:", err);
+  }
 }
 
 // Download a file from a bucket
@@ -79,16 +116,31 @@ async function downloadObject(bucketName, objectName, downloadPath) {
   }
 }
 
+async function removeObject(bucketName, objectName) {
+  try {
+    await s3Client.removeObject(bucketName, objectName);
+    console.log(`Object "${objectName}" removed from bucket "${bucketName}".`);
+  } catch (err) {
+    console.error("Error removing object:", err.message);
+  }
+}
+
 // Main menu for user input
 async function main() {
-  console.log("Welcome to the S3 Client App!");
+  console.log("Welcome to the Minio - S3 Client App!");
   const action = readline
-    .question("Choose an action: (listBuckets/listObjects/upload/download): ")
+    .question(
+      "Choose an action: (createBucket/listBuckets/deleteBucket/listObjects/uploadObject/downloadObject/removeObject): "
+    )
     .toLowerCase();
-
+  console.log("Action selected:", action);
   switch (action) {
     case "listbuckets":
       await listBuckets();
+      break;
+    case "createbucket":
+      const bucketName = readline.question("Enter bucket name to create: ");
+      await createBucket(bucketName);
       break;
     case "listobjects":
       const bucketToList = readline.question(
@@ -96,7 +148,7 @@ async function main() {
       );
       await listObjects(bucketToList);
       break;
-    case "upload":
+    case "uploadobject":
       const uploadBucket = readline.question(
         "Enter bucket name to upload to: "
       );
@@ -104,7 +156,7 @@ async function main() {
       const objectName = readline.question("Enter object name for S3: ");
       await uploadObject(uploadBucket, filePath, objectName);
       break;
-    case "download":
+    case "downloadobject":
       const downloadBucket = readline.question(
         "Enter bucket name to download from: "
       );
@@ -115,6 +167,10 @@ async function main() {
         "Enter file path to save downloaded file: "
       );
       await downloadObject(downloadBucket, objectToDownload, downloadPath);
+      break;
+    case "removeobject":
+      const removeBucket = readline.question("Enter bucket name to remove: ");
+      await removeBucket(removeBucket);
       break;
     default:
       console.log("Invalid action. Please try again.");
